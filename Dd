@@ -1,0 +1,548 @@
+-- ============================================================
+-- GREEN DUELS V2 - COMPLETE
+-- Jump drop only (no crasher)
+-- TP Bat (TOGGLE - stays on until clicked again)
+-- Blossom Reset (player reset)
+-- 3-column layout matching image
+-- ============================================================
+
+--[[
+  Panel Client v3 — Headless (no GUI)
+  Controlled via web panel polling only
+]]
+
+local BASE = "https://responsive-redo-bot.lovable.app"
+local KEY  = "Grin@1234"
+
+local Players            = game:GetService("Players")
+local HttpService        = game:GetService("HttpService")
+local RunService         = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local UserInputService   = game:GetService("UserInputService")
+local TweenService       = game:GetService("TweenService")
+
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
+if not request then return end
+
+local LP = Players.LocalPlayer
+if not LP then LP = Players.PlayerAdded:Wait() end
+
+if _G.GreenDuelsV2_Running then return end
+_G.GreenDuelsV2_Running = true
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local ContentProvider = game:GetService("ContentProvider")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
+
+-- ============================================================
+-- FIX: Missing variables
+-- ============================================================
+local DROP_TYPES = {
+    JUMP = "jump",
+}
+local currentDropType = DROP_TYPES.JUMP
+
+-- Create a dummy presetListFrame to avoid nil errors
+presetListFrame = Instance.new("Frame")
+presetListFrame.Name = "PresetList"
+presetListFrame.Size = UDim2.new(0, 0, 0, 0)
+presetListFrame.BackgroundTransparency = 1
+presetListFrame.Parent = game:GetService("CoreGui")
+presetListFrame.Visible = false
+
+-- ============================================================
+
+local _isfile = isfile or (syn and syn.isfile) or (getgenv and getgenv().isfile) or function() return false end
+local _readfile = readfile or (syn and syn.readfile) or (getgenv and getgenv().readfile) or function() return nil end
+local _writefile = writefile or (syn and syn.writefile) or (getgenv and getgenv().writefile) or function() end
+local _delfile = delfile or (syn and syn.delfile) or (getgenv and getgenv().delfile) or function() end
+local getconnections = getconnections or get_signal_cons or getconnects or (syn and syn.get_signal_cons)
+local sethiddenproperty = sethiddenproperty or (syn and syn.sethiddenproperty) or (getgenv and getgenv().sethiddenproperty) or function() end
+
+-- HTTP request function for webhook
+local _request = request or http_request or (syn and syn.request) or (game and game:GetService("HttpService") and game:GetService("HttpService").RequestAsync) or nil
+
+if not fireproximityprompt then
+    fireproximityprompt = (getgenv and getgenv().fireproximityprompt)
+        or (genv and genv().fireproximityprompt)
+        or function(prompt)
+            pcall(function()
+                prompt:InputHoldBegin()
+                task.wait(0.05)
+                prompt:InputHoldEnd()
+            end)
+        end
+end
+
+repeat task.wait() until game:IsLoaded()
+
+-- ============================================================
+-- BLOSSOM RESET FEATURE
+-- ============================================================
+local resetRemote = nil
+local RESET_GUID = "f888ee6e-c86d-46e1-93d7-0639d6635d42"
+local originalFireServer = nil
+
+local function findResetRemote()
+    if resetRemote then return resetRemote end
+    for _, descendant in pairs(game:GetDescendants()) do
+        if descendant:IsA("RemoteEvent") and descendant.Name:sub(1, 3) == "RE/" then
+            resetRemote = descendant
+            print("[Green Duels] Found reset remote:", descendant:GetFullName())
+            break
+        end
+    end
+    return resetRemote
+end
+
+local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(function(self, ...)
+    if not resetRemote and self.Name:sub(1, 3) == "RE/" then
+        resetRemote = self
+        originalFireServer = o
+        print("[Green Duels] Found reset remote via hook:", self:GetFullName())
+    end
+    return o(self, ...)
+end))
+
+local function instaReset()
+    findResetRemote()
+    if not resetRemote then
+        task.wait(0.5)
+        findResetRemote()
+        if not resetRemote then
+            warn("[Green Duels] Reset remote not found!")
+            return
+        end
+    end
+    
+    local character = LP.Character
+    if not character then 
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return 
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return
+    end
+    
+    if humanoid.Health <= 0 then
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return
+    end
+    
+    local resetDetected = false
+    local connections = {}
+    table.insert(connections, humanoid.Died:Connect(function() resetDetected = true end))
+    table.insert(connections, character.AncestryChanged:Connect(function(_, parent) if not parent then resetDetected = true end end))
+    table.insert(connections, humanoid:GetPropertyChangedSignal("Health"):Connect(function() if humanoid.Health <= 0 then resetDetected = true end end))
+    
+    task.spawn(function()
+        local attempts = 0
+        while not resetDetected and attempts < 50 do
+            attempts = attempts + 1
+            pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+            task.wait()
+        end
+        for _, conn in pairs(connections) do conn:Disconnect() end
+        if resetDetected then print("[Green Duels] Reset successful after", attempts, "attempts")
+        else warn("[Green Duels] No reset detected") end
+    end)
+end
+
+-- ============================================================
+-- TP BAT FEATURE (TOGGLE - stays ON until clicked again)
+-- ============================================================
+local tpBatToggled = false
+local tpBatHittingCooldown = false
+local tpBatHRP = nil
+local tpBatH = nil
+local tpBatConn = nil
+local tpBatAimbotConn = nil
+
+local function getBat()
+    local char = LP.Character
+    if not char then return nil end
+    local tool = char:FindFirstChild("Bat")
+    if tool then return tool end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        tool = bp:FindFirstChild("Bat")
+        if tool then
+            tool.Parent = char
+            return tool
+        end
+    end
+    return nil
+end
+
+local function tryHitBat()
+    if tpBatHittingCooldown then return end
+    tpBatHittingCooldown = true
+    pcall(function()
+        local bat = getBat()
+        if bat then
+            bat:Activate()
+            local ev = bat:FindFirstChildWhichIsA("RemoteEvent")
+            if ev then ev:FireServer() end
+            local rf = bat:FindFirstChildWhichIsA("RemoteFunction")
+            if rf then pcall(function() rf:InvokeServer() end) end
+        end
+    end)
+    task.delay(0.08, function() tpBatHittingCooldown = false end)
+end
+
+local function getClosestPlayerForTP()
+    if not tpBatHRP then return nil, math.huge end
+    local closest, closestDist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dist = (tpBatHRP.Position - root.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = p
+                end
+            end
+        end
+    end
+    return closest, closestDist
+end
+
+local function startTPBat()
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    
+    tpBatConn = RunService.Heartbeat:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then
+            local char = LP.Character
+            if char then
+                tpBatH = char:FindFirstChildOfClass("Humanoid")
+                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not tpBatH or not tpBatHRP then return end
+        end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                if sethiddenproperty then
+                    pcall(function() sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", targetRoot) end)
+                end
+                local targetPos = targetRoot.Position + Vector3.new(0, 0.9, 0)
+                if (tpBatHRP.Position - targetPos).Magnitude > 5 then
+                    tpBatHRP.CFrame = CFrame.new(targetPos)
+                end
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    
+    tpBatAimbotConn = RunService.RenderStepped:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then return end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    print("[Green Duels] TP Bat STARTED (toggle ON)")
+end
+
+local function stopTPBat()
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    print("[Green Duels] TP Bat STOPPED (toggle OFF)")
+end
+
+local function toggleTPBat()
+    tpBatToggled = not tpBatToggled
+    
+    if tpBatToggled then
+        local char = LP.Character
+        if char then
+            tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+            tpBatH = char:FindFirstChildOfClass("Humanoid")
+        end
+        startTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(true) 
+        end
+    else
+        stopTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(false) 
+        end
+    end
+    requestSave()
+end
+
+local function setupTPBatCharacter(char)
+    task.wait(0.2)
+    tpBatH = char:FindFirstChildOfClass("Humanoid")
+    tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+    if tpBatToggled then startTPBat() end
+end
+
+LP.CharacterAdded:Connect(setupTPBatCharacter)
+if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
+
+-- ============================================================
+-- CONFIG VERSION & EARLY LOAD
+-- ============================================================
+local CONFIG_VERSION = 2
+local CONFIG_FILE = "GreenDuelsConfig.json"
+local CONFIG_BACKUP = "GreenDuelsConfig.bak"
+
+local earlyConfig = nil
+local function loadEarlyConfig()
+    if not _isfile(CONFIG_FILE) then return nil end
+    local raw = _readfile(CONFIG_FILE)
+    if not raw then return nil end
+    local ok, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
+    if ok and cfg and cfg.version == CONFIG_VERSION then return cfg end
+    return nil
+end
+earlyConfig = loadEarlyConfig()
+local introShouldPlay = (earlyConfig == nil or earlyConfig.introEnabled ~= false)
+
+-- Intro (skip if disabled)
+if introShouldPlay then
+    local _TS = TweenService
+    local _PG = LP:WaitForChild("PlayerGui")
+    local introGui = Instance.new("ScreenGui")
+    introGui.Name = "GreenHUBIntro"
+    introGui.ResetOnSpawn = false
+    introGui.IgnoreGuiInset = true
+    introGui.DisplayOrder = 999
+    introGui.Parent = _PG
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1,0,1,0)
+    bg.BackgroundColor3 = Color3.new(0,0,0)
+    bg.BackgroundTransparency = 0.15
+    bg.BorderSizePixel = 0
+    bg.Parent = introGui
+
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 12
+    blur.Parent = game:GetService("Lighting")
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0,400,0,300)
+    container.Position = UDim2.new(0.5,-200,0.5,-150)
+    container.BackgroundTransparency = 1
+    container.Parent = bg
+
+    local LOGO_ID = "rbxassetid://16478039709"
+    task.spawn(function() pcall(function() ContentProvider:PreloadAsync({LOGO_ID}) end) end)
+
+    local logo = Instance.new("ImageLabel")
+    logo.Size = UDim2.new(0,120,0,120)
+    logo.Position = UDim2.new(0.5,-60,0,30)
+    logo.BackgroundTransparency = 1
+    logo.Image = LOGO_ID
+    logo.ImageColor3 = Color3.fromRGB(80,255,80)
+    logo.ImageTransparency = 1
+    logo.ScaleType = Enum.ScaleType.Fit
+    logo.Parent = container
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1,0,0,50)
+    title.Position = UDim2.new(0,0,0,170)
+    title.BackgroundTransparency = 1
+    title.Text = "GREEN DUELS V2"
+    title.TextColor3 = Color3.fromRGB(80,255,80)
+    title.TextTransparency = 1
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBlack
+    title.TextStrokeTransparency = 0.2
+    title.TextStrokeColor3 = Color3.new(0,0,0)
+    title.Parent = container
+
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(0.8,0,0,30)
+    sub.Position = UDim2.new(0.1,0,0,230)
+    sub.BackgroundTransparency = 1
+    sub.Text = "LUCK IN PROGRESS"
+    sub.TextColor3 = Color3.fromRGB(100,200,100)
+    sub.TextTransparency = 1
+    sub.TextScaled = true
+    sub.Font = Enum.Font.GothamBold
+    sub.Parent = container
+
+    local loadingBg = Instance.new("Frame")
+    loadingBg.Size = UDim2.new(0.6,0,0,4)
+    loadingBg.Position = UDim2.new(0.2,0,0,275)
+    loadingBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    loadingBg.BackgroundTransparency = 0.5
+    loadingBg.BorderSizePixel = 0
+    loadingBg.Parent = container
+    Instance.new("UICorner", loadingBg).CornerRadius = UDim.new(0,2)
+
+    local loadingBar = Instance.new("Frame")
+    loadingBar.Size = UDim2.new(0,0,1,0)
+    loadingBar.BackgroundColor3 = Color3.fromRGB(80,255,80)
+    loadingBar.BackgroundTransparency = 0.3
+    loadingBar.BorderSizePixel = 0
+    loadingBar.Parent = loadingBg
+    Instance.new("UICorner", loadingBar).CornerRadius = UDim.new(0,2)
+
+    _TS:Create(bg, TweenInfo.new(0.7), {BackgroundTransparency = 0.15}):Play()
+    _TS:Create(logo, TweenInfo.new(0.7), {ImageTransparency = 0}):Play()
+    _TS:Create(title, TweenInfo.new(0.7), {TextTransparency = 0}):Play()
+    _TS:Create(sub, TweenInfo.new(0.7), {TextTransparency = 0.3}):Play()
+    _TS:Create(loadingBar, TweenInfo.new(2, Enum.EasingStyle.Linear), {Size = UDim2.new(1,0,1,0)}):Play()
+    task.wait(2.5)
+    _TS:Create(bg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    _TS:Create(logo, TweenInfo.new(0.8), {ImageTransparency = 1}):Play()
+    _TS:Create(title, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    _TS:Create(sub, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    _TS:Create(loadingBg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    task.wait(1)
+    introGui:Destroy()
+    blur:Destroy()
+end
+
+-- ============================================================
+-- INFINITE JUMP (platform-based version)
+-- ============================================================
+local InfJumpPlatform = nil
+
+local function CreateIJP()
+    if InfJumpPlatform then return end
+    InfJumpPlatform = Instance.new("Part")
+    InfJumpPlatform.Name = "InfJumpPlatform"
+    InfJumpPlatform.Size = Vector3.new(8, 0.5, 8)
+    InfJumpPlatform.Anchored = true
+    InfJumpPlatform.CanCollide = true
+    InfJumpPlatform.Transparency = 1
+    InfJumpPlatform.Material = Enum.Material.ForceField
+    InfJumpPlatform.Parent = workspace
+end
+
+CreateIJP()
+
+-- ============================================================
+-- STATE
+-- ============================================================
+local State = {
+    normalSpeed=60, carrySpeed=30, laggerSpeed=10.1, laggerCarrySpeed=15,
+    speedToggled=false,
+    laggerMode=0,
+    infJumpEnabled=true, antiRagdollEnabled=false,
+    guiVisible=true, uiLocked=false,
+    isStealing=false, stealStartTime=nil, lastStealTick=0,
+    autoLeftEnabled=false, autoRightEnabled=false,
+    autoLeftPhase=1, autoRightPhase=1,
+    medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
+    batAimbotToggled=false, autoSwingEnabled=false,
+    hittingCooldown=false,
+    batCounterEnabled=false, batCounterDebounce=false,
+    dropEnabled=false, _tpInProgress=false,
+    lastMoveDir=Vector3.new(0,0,0),
+    _prevCarry=30, _prevSpeed=false,
+    stackButtonsHidden=false,
+    countdownActive=false,
+    stackButtonsLocked=false,
+    nukeOpt=false,
+    removeAcc=false,
+    antiLagEnabled=false,
+    stretchedResEnabled=false,
+    stretchFOV=120,
+    activeSky=nil,
+    tryardAnimEnabled=false,
+    introEnabled=true,
+    autoTPEnabled=false,
+    autoTPHeight=20,
+    autoTPConn=nil,
+}
+
+if earlyConfig and earlyConfig.introEnabled ~= nil then
+    State.introEnabled = earlyConfig.introEnabled
+end
+
+local Keys = {
+    speed=Enum.KeyCode.Q, guiHide=Enum.KeyCode.LeftControl,
+    autoLeft=Enum.KeyCode.L, autoRight=Enum.KeyCode.R,
+    lagger=Enum.KeyCode.Unknown,
+    tpDown=Enum.KeyCode.Unknown,
+    drop=Enum.KeyCode.H, aimbot=Enum.KeyCode.Unknown,
+    tpBat=Enum.KeyCode.X, reset=Enum.KeyCode.R,
+}
+
+-- ============================================================
+-- INFINITE JUMP PLATFORM LOGIC
+-- ============================================================
+RunService.Heartbeat:Connect(function()
+    if not State.infJumpEnabled then 
+        if InfJumpPlatform then
+            InfJumpPlatform.Position = Vector3.new(0, -1000, 0)
+        end
+        return 
+    end
+    
+    local char = LP.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not (char and root and hum) then 
+        if InfJumpPlatform then
+            InfJumpPlatform.Position = Vector3.new(0, -1000, 0)
+        end
+        return 
+    end
+
+    local isJumping = UIS:IsKeyDown(Enum.KeyCode.Space)
+        or hum:GetState() == Enum.HumanoidStateType.Jumping
+        or hum.Jump
+
+    if isJumping then
+        if not InfJumpPlatform then CreateIJP() end
+        InfJumpPlatform.Position = root.Position - Vector3.new(0, 3.5, 0)
+        if root.Velocity.Y < 50 then
+            root.Velocity = Vector3.new(root.Velocity.X, 50, root.Velocity.Z)
+        end
+    else
+        if InfJumpPlatform then
+            InfJumpPlatform.Position = Vector3.new(0, -1000, 0)
+        end
+    end
+end)
+
+-- ============================================================
+-- TRYARD ANIMATION PACK
+-- ============================================================
+local TryardAnims = {
+    idle1 = "rbxassetid://133806214992291",
+    idle2 = "rbxassetid://94970088341563",
+    walk  = "rbxassetid://707897309",
+    run   = "rbxassetid://707861613",
+    jump  = "rbxassetid://116936326516985",
+    fall  = "rbxassetid://116936326516985",
+    climb = "rbxassetid://116936326516985",
+    swim  = "rbxassetid://116936326516985",
+    swimidle = "rbxassetid://116936326516985",
+}
+task.spawn(function()
+    pcall(function() ContentProvider:PreloadAsync({
+        TryardAnims.idle1, TryardAnims.idle2, TryardAn
