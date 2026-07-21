@@ -1,0 +1,43 @@
+--[==[
+    Move Duels Script - Full Loader Code
+    GitHub Source Integration
+]==]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local HS = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local introSoundEnabled = true
+
+if isfile and isfile("moveeduels.json") then
+    local ok, data = pcall(function() return HS:JSONDecode(readfile("moveeduels.json")) end)
+    if ok and type(data) == "table" and data.introSoundEnabled ~= nil then
+        introSoundEnabled = data.introSoundEnabled
+    end
+end
+
+local introSoundInstance = nil
+if introSoundEnabled then
+    local urlIntro = "https://files.catbox.moe/hg5cr4.mp3"
+    local numeFisier = "movee_intro.mp3"
+    local ok, data = pcall(function() return game:HttpGet(urlIntro) end)
+    if ok and data then
+        pcall(function() writefile(numeFisier, data) end)
+    end
+    introSoundInstance = Instance.new("Sound")
+    pcall(function()
+        introSoundInstance.SoundId = getcustomasset(numeFisier)
+        introSoundInstance.Volume = 3
+        introSoundInstance.Looped = false
+        introSoundInstance.Parent = game:GetService("CoreGui")
+        introSoundInstance:Play()
+    end)
+end
+
+repeat task.wait() until game:IsLoaded()
+
+print("[Move Duels] Script injected successfully! Enjoy playing.")
